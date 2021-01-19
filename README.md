@@ -27,7 +27,7 @@ https://satijalab.org/seurat/v3.2/pbmc3k_tutorial.html
 
 ### Cell Type Cluster Identification Additional Notes
 * Begins at line 100 in **3_1_seurat_cluster.Rmd**.
-* Using the **markers_3_1** dataframe in line 108, find the cell markers with highest differential expression (ave_logFC) from each cluster to determine cell type (using more than 1 cell marker is recommended).
+* Using the **markers_3_1** dataframe in line 108, find the cell markers with highest differential expression (ave_logFC) from each cluster to determine cell type (using 2-3 cell markers per cluster is recommended).
 * Use cell marker databases to correspond cell types.
 * Cell marker databases I found useful:
   * http://bio-bigdata.hrbmu.edu.cn/CellMarker/

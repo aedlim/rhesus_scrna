@@ -7,7 +7,7 @@ https://github.com/mydennislab/rhesus_expression/blob/master/10x_RNAseq/10x_60dp
 ## Data Analysis
 
 ## Seurat used to cluster cell types
-See Seurat Guided Clustering Tutorial for details:
+See **Seurat Guided Clustering Tutorial** for details:
 https://satijalab.org/seurat/v3.2/pbmc3k_tutorial.html
 
 Using Sample 3_1 as an example

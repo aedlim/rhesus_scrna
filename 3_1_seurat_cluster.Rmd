@@ -1,0 +1,155 @@
+---
+title: "Rhesus scRNA Seurat Clustering"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+```
+
+# Load the dataset
+```{r}
+# Load the dataset
+scRNA_3_1.data <- Read10X(data.dir = "cellranger/3_1/outs/filtered_feature_bc_matrix")
+
+# Initialize the Seurat object with the raw (non-normalized data).
+scRNA_3_1 <- CreateSeuratObject(counts = scRNA_3_1.data, project = "rhesus", min.cells = 10, min.features = 200)
+```
+
+# Standard pre-processing workflow
+```{r}
+# The [[ operator can add columns to object metadata. This is a great place to stash QC stats
+scRNA_3_1[["percent.mt"]] <- PercentageFeatureSet(scRNA_3_1, pattern = "^MT-")
+
+# Visualize QC metrics as a violin plot
+VlnPlot(scRNA_3_1, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+# FeatureScatter is typically used to visualize feature-feature relationships, but can be used for anything calculated by the object, i.e. columns in object metadata, PC scores etc.
+plot1 <- FeatureScatter(scRNA_3_1, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(scRNA_3_1, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+scRNA_3_1_subset <- subset(scRNA_3_1, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+# Normalizing the data
+```{r}
+scRNA_3_1_normalized <- NormalizeData(scRNA_3_1_subset, normalization.method = "LogNormalize", scale.factor = 10000)
+scRNA_3_1_features <- FindVariableFeatures(scRNA_3_1_normalized, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(scRNA_3_1_features), 10)
+
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(scRNA_3_1_features)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1
+plot2
+
+# Scaling the data
+all.genes <- rownames(scRNA_3_1_features)
+scRNA_3_1_scaled <- ScaleData(scRNA_3_1_features, features = all.genes)
+
+# Perform linear dimensional reduction
+scRNA_3_1_linear_reduction <- RunPCA(scRNA_3_1_scaled, features = VariableFeatures(object = scRNA_3_1_scaled))
+```
+
+# Examine and visualize PCA results a few different ways
+```{r}
+print(scRNA_3_1_linear_reduction[["pca"]], dims = 1:5, nfeatures = 5)
+
+VizDimLoadings(scRNA_3_1_linear_reduction, dims = 1:2, reduction = "pca")
+
+DimPlot(scRNA_3_1_linear_reduction, reduction = "pca")
+
+DimHeatmap(scRNA_3_1_linear_reduction, dims = 1, cells = 500, balanced = TRUE)
+
+DimHeatmap(scRNA_3_1_linear_reduction, dims = 1:15, cells = 500, balanced = TRUE)
+```
+
+# Determine the 'dimensionality' of the dataset
+```{r}
+# NOTE: This process can take a long time for big datasets, comment out for expediency. More approximate techniques such as those implemented in ElbowPlot() can be used to reduce computation time
+scRNA_3_1_jackstraw <- JackStraw(scRNA_3_1_linear_reduction, num.replicate = 100)
+scRNA_3_1_jackstraw <- ScoreJackStraw(scRNA_3_1_jackstraw, dims = 1:20)
+
+JackStrawPlot(scRNA_3_1_jackstraw, dims = 1:15)
+
+ElbowPlot(scRNA_3_1_jackstraw)
+```
+
+# Cluster the cells
+```{r}
+scRNA_3_1_cluster <- FindNeighbors(scRNA_3_1_jackstraw, dims = 1:10)
+scRNA_3_1_cluster <- FindClusters(scRNA_3_1_cluster, resolution = 0.5)
+
+# Look at cluster IDs of the first 5 cells
+head(Idents(scRNA_3_1_cluster), 5)
+
+# Run non-linear dimensional reduction (UMAP/tSNE)
+scRNA_3_1_cluster <- RunUMAP(scRNA_3_1_cluster, dims = 1:10)
+# note that you can set `label = TRUE` or use the LabelClusters function to help label individual clusters
+DimPlot(scRNA_3_1_cluster, reduction = "umap")
+
+# You can save the object at this point so that it can easily be loaded back in without having to rerun the computationally intensive steps performed above, or easily shared with collaborators.
+saveRDS(scRNA_3_1_cluster, file = "scRNA_3_1_cluster_load.rds")
+```
+
+# Finding differentially expressed features (cluster biomarkers)
+```{r}
+# find all markers of cluster 1
+cluster1.markers <- FindMarkers(scRNA_3_1_cluster, ident.1 = 1, min.pct = 0.25)
+head(cluster1.markers, n = 5)
+
+# find markers for every cluster compared to all remaining cells, report only the positive ones
+pbmc.markers_3_1 <- FindAllMarkers(scRNA_3_1_cluster, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+pbmc.markers_3_1 %>% group_by(cluster) %>% top_n(n = 2, wt = avg_logFC)
+
+# Use FeaturePlot to visualize certain gene markers
+#Cluster0
+FeaturePlot(scRNA_3_1_cluster, features = c("DLX6-AS1", "ERBB4"))
+#Cluster1
+FeaturePlot(scRNA_3_1_cluster, features = c("PPP1R17", "HBA1"))
+#Cluster2
+FeaturePlot(scRNA_3_1_cluster, features = c("SATB2", "CSRP2"))
+#Cluster3
+FeaturePlot(scRNA_3_1_cluster, features = c("NEUROD2", "SLA"))
+#Cluster4
+FeaturePlot(scRNA_3_1_cluster, features = c("MEF2C", "RPRM"))
+#Cluster5
+FeaturePlot(scRNA_3_1_cluster, features = c("UBE2C", "KIAA0101"))
+#Cluster6
+FeaturePlot(scRNA_3_1_cluster, features = c("ZFHX3", "FOXP1"))
+#Cluster7
+FeaturePlot(scRNA_3_1_cluster, features = c("NRN1", "NFIB"))
+#Cluster8
+FeaturePlot(scRNA_3_1_cluster, features = c("PTN", "VIM"))
+#Cluster9
+FeaturePlot(scRNA_3_1_cluster, features = c("ANK3", "RALYL"))
+#Cluster10
+FeaturePlot(scRNA_3_1_cluster, features = c("SPP1", "LGALS3"))
+#Cluster11
+FeaturePlot(scRNA_3_1_cluster, features = c("OLIG1", "SCRG1"))
+#Cluster12
+FeaturePlot(scRNA_3_1_cluster, features = c("RAMP2", "RNASE1"))
+```
+#Assigning cell type identity to clusters
+```{r}
+new.cluster.ids_3_1 <- c("Interneurons", "Intermediate progenitor cells", "Maturing excitatory neuron", "Newborn excitatory neuron", "Dopaminergic amacrine neuron", "Neural stem cell", "Striatal inhibitory neuron", "Cortical neuron", "Radial glia", "Pyramidal neuron","Microglia", "Oligodendrocyte progenitor cells", "Pericyte")
+names(new.cluster.ids_3_1) <- levels(scRNA_3_1_cluster)
+scRNA_3_1_cluster <- RenameIdents(scRNA_3_1_cluster, new.cluster.ids_3_1)
+DimPlot(scRNA_3_1_cluster, reduction = "umap", label = FALSE, pt.size = 0.5)
+DimPlot(scRNA_3_1_cluster, reduction = "umap", label = TRUE, pt.size = 0.5)+NoLegend()
+```
+
+#Output number of cells in each cluster
+```{r}
+table(scRNA_3_1_cluster@active.ident)
+```
+
+# Save final object for easy loading
+```{r}
+saveRDS(scRNA_3_1_cluster, file = "scRNA_3_1_cluster_final.rds")
+```

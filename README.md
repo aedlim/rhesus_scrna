@@ -1,7 +1,7 @@
 # Rhesus Brain Single-cell RNA-seq
 
 ## Introduction
-Sample, library, and initial data analysis details can be found here:
+* Sample, library, and initial data analysis details can be found here:
 https://github.com/mydennislab/rhesus_expression/blob/master/10x_RNAseq/10x_60dpf_pilot.md
 
 * Location of raw data
